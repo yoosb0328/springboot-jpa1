@@ -38,3 +38,6 @@ out/
 
 ###PNG###
 *.png
+
+### Querydsl
+/src/main/generated
