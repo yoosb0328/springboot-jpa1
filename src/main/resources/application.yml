@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:h2:tcp://localhost/~/test;
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create #none
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 100
+#    open-in-view: false
+  thymeleaf: # 스프링 부트 타임리프 기본 설정임.
+    prefix: classpath:/templates/
+    suffix: .html
+
+logging.level:
+    org.hibernate.SQL: debug
+    #org.hibernate.type: trace #쿼리 파라미터 로그 남기기. p6spy implements했기때문에 trace 껐음.

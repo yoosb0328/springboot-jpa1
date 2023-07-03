@@ -1,0 +1,191 @@
+비즈니스 로직이 대부분 엔티티에 있어 서비스 계층에서 단순히 엔티티에 필요한 요청을 위임하는 패턴 : 도메인 모델 패턴
+반대로 서비스 계층에서 대부분의 로직을 처리하는 패턴 : 트랜잭션 스크립트 패턴
+한 프로젝트 내에서도 두 패턴이 양립한다. 상황에 따라 선택...
+
+좋은 테스트는 스프링, DB와 엮지 않고 순수하게 단위 메서드 테스트가 이뤄지는 것이 좋음
+
+#부트스트랩 버전에 맞는 integrity 써야함.
+#부트스트랩5부터는 jumbotron 적용 안됨
+
+#JPA에는 데이터 수정에 두가지 변경감지 병합이 있다. (매우 중요!!!!!)
+->JPA가 권장하는 것은 변경감지(== dirty checking)
+
+-준영속 엔티티란?
+영속성 컨텍스트가 더 이상 관리하지 않는 엔티티를 말한다.
+ItemController에서 updateItem()의 Book 객체가 해당한다.
+Book 객체는 이미 DB에 한번 저장되어 식별자가 존재한다.
+이렇게 임의로 생성한 엔티티 객체도 기존 식별자를 가지고 있으면 준영속 엔티티로 볼 수 있다.
+
+준영속 엔티티의 문제 : JPA가 관리를 하지 않는다... => 변경감지가 일어나지 않는다..
+그러면 어떻게?
+1. 변경 감지 기능 사용(dirty checking) : find로 객체를 찾아와 영속 상태로 만들면 변경 감지가 기능한다.
+2. 병합(merge) 사용
+변경감지를 사용하면 원하는 속성만 선택해서 변경할 수 있지만
+병합을 사용하면 모든 속성을 변경해야 한다. -> null값이 들어갈 위험성 존재.
+
+결론 : 엔티티를 변경할 때는 항상 변경감지를 사용하자
+-컨트롤러에서 어설프게 엔티티 객체를 생성하지 말자.
+-트랜잭션이 있는 서비스 계층에 식별자와 변경할 데이터를 명확하게 전달할 것(파라미터 or DTO)
+-트랜잭션이 있는 서비스 계층에서 영속 상태의 엔티티를 조회하고 엔티티의 데이터를 직접 변경한다.
+-트랜잭션 커밋 시점에 변경 감지가 실행된다.
+
+
+# 커맨드성 기능 구현
+-컨트롤러단에서는 식별자 정도만 넘기고 서비스단에서 식별을 하여 영속성 컨텍스트에 올리는 것이 좋다.
+
+#템플릿 엔진으로 렌더링하는 컨트롤러와 API를 사용하는 컨트롤러는 다른 패키지로 분리하는 것 추천.
+
+#API 통신을 할 때 엔티티를 직접 전송한다면?
+-유효성 검증(예 :Not Empty) 등 화면(프레젠테이션 레이어)로직이 엔티티에 결합되어버림
+-엔티티 필드명이 바뀐다면? API 스펙이 바뀌어 버림 -> 어떤 사이드 이펙트가 발생할지 모름.
+-로직이 복잡해진다면 엔티티로 감당하기 어려움.
+-> API통신을 위한 DTO 클래스를 만들자! 절대 엔티티로 데이터를 전송해서도 받아서도 안된다!
+(엔티티 필드명이 바뀌면 컴파일 단계 에러발생하여 알 수 있음!)
+
+#지연 로딩과 조회 성능 최적화 (매우 중요!!!)
+-> 기본적으로 로딩 전략은 LAZY를 사용하여야 함(지연로딩에 따른 1+N 방지) -> JOIN 발생 -> 성능 저하
+-> 어떻게 최적화 할 것인가?? => Fetch 조인(대부분의 성능 이슈 해결)
+
+# 성능 개선 방안
+-> 조인 쿼리를 이용해 여러번의 SELECT 문이 실행되는 1+N 문제를 방지함.
+-> 엔티티를 직접 이용하는 방식의 쿼리
+select
+        order0_.order_id as order_id1_6_0_,
+        member1_.member_id as member_i1_4_1_,
+        delivery2_.delivery_id as delivery1_2_2_,
+        order0_.delivery_id as delivery4_6_0_,
+        order0_.member_id as member_i5_6_0_,
+        order0_.order_date as order_da2_6_0_,
+        order0_.status as status3_6_0_,
+        member1_.city as city2_4_1_,
+        member1_.street as street3_4_1_,
+        member1_.zipcode as zipcode4_4_1_,
+        member1_.name as name5_4_1_,
+        delivery2_.city as city2_2_2_,
+        delivery2_.street as street3_2_2_,
+        delivery2_.zipcode as zipcode4_2_2_,
+        delivery2_.status as status5_2_2_
+    from
+        orders order0_
+    inner join
+        member member1_
+            on order0_.member_id=member1_.member_id
+    inner join
+        delivery delivery2_
+            on order0_.delivery_id=delivery2_.delivery_id
+
+-> DTO를 이용하는 방식
+select
+        order0_.order_id as col_0_0_,
+        member1_.name as col_1_0_,
+        order0_.order_date as col_2_0_,
+        order0_.status as col_3_0_,
+        delivery2_.city as col_4_0_,
+        delivery2_.street as col_4_1_,
+        delivery2_.zipcode as col_4_2_
+    from
+        orders order0_
+    inner join
+        member member1_
+            on order0_.member_id=member1_.member_id
+    inner join
+        delivery delivery2_
+            on order0_.delivery_id=delivery2_.delivery_id
+
+=> 어떤 방식을 택하여야 할까..?
+=> DTO 방식을 선택하기엔 SELECT 문에 필드가 추가 되는 것으로 크게 성능이 저하하지 않음(데이터 크기가 너무 크지 않는 이상)(네트워크 성능이 좋아져서)
+=> DTO 방식은 상대적으로 유지보수성이 떨어짐.
+=> Repository는 엔티티를 조회하기 위한 계층인데 DTO를 조회한다는 것은 논리계층에 맞지 않다(API 스펙이 들어온것..)
+=> 화면에 의존성 높은 simplequery Repository를 사용한다면 따로 분리해서 사용하자.
+
+************ 쿼리 방식 선택 권장 순서 ********************
+1. 우선 엔티티를 DTO로 변환하는 방법을 선택한다.(예제 v2)
+2. 필요하면 페치 조인으로 성능을 최적화 한다. 대부분의 성능 이슈가 해결된다.(예제 v3)
+3. 그래도 안되면 DTO로 직접 조회하는 방법을 사용한다.(예제 v4)
+4. 최후의 방법은 JPA가 제공하는 네이티브 SQL이나 스프링 JDBC Template을 사용해서 SQL을 직접 사
+용한다.
+
+
+#컬렉션 조회 (일대다) 최적화
+-페치 조인
+장점 : SQL 1회 실행
+일대다 조인 -> 조회 결과 row 증가
+-> 같은 엔티티 조회 수 증가 -> distinct 사용 ->SQL에 dictinct 추가 및 같은 엔티티 조회 시 중복거름
+단점 : 페이징 불가능 (컬렉션 패치 조인 사용 시 페이징 불가능함 => 엄밀히는 메모리에서 페이징을 하게됨 => 쓰면안됨..매우위험 **단 ToOne관계에선 무관)
+=> 페이징의 목적은 일대다 관계라면 '일'을 기준으로 해야하는데 일대다 조인을 걸어버리는 순간 쿼리를 살펴보면 알 수 있듯, '다'가 기준으로 되어버림(=데이터 row가 매우 늘어남)
+
+#페이징과 한계돌파
+-일대다 관계에서 페치조인으로 인한 페이징 불가 이슈를 해결하기 위함.
+-페이징도하고 컬렉션 엔티티도 조회하고 싶다면 ??
+-전체 쿼리에서 ToOne 관계인 엔티티에 대한 조인쿼리는 fetch조인을 그대로, 컬렉션은 지연로딩으로, 지연로딩 성능 최적화를 위해 @BatchSize 설정 or hibernate.default_batch_fetch_size 설정
+-> default_batch_fetch_size를 적용하면 ToMany에 해당하는 객체를 where ooo in ()  쿼리를 사용해서 미리 가져온다(select)
+예를 들어 orders를 조회한다면, order 객체와 일대다에 해당하는 orderItem을 in 쿼리를 사용해서 미리 가져오게 되는 것이다.
+**ToOne관계도 굳이 fetch join 문 쓰지 않아도 default_batch_fetch_size로 in query적용 할 수는 있지만 ToOne관계까지 굳이 쿼리 개수를 늘릴 필요는 없으므로...
+*
+order객체의 검색 조건에 맞게. order_id가 4, 11이라면 order_id가 4,11인 orderItem들을 가져옴.
+default_batch_fetch_size 설정 전에는 order_id = 4인 orderItem 조회 쿼리 한번,
+order_id = 11인 조회 쿼리를 또 한번 실행하여 1+N 문제가 발생하였다.
+*
+이때 select 하는 데이터의 최대 개수를 default_batch_fetch_size로 설정하는 것이다.
+default_batch_fetch_size = 10 이고 조건에 해당하는 orderItem은 100개라면 지연로딩된 orderItem을 조회하는 성능최적화 쿼리는 10회 실행될 것이다.
+따라서 default_batch_fetch_size를 크게하면 쿼리 실행 갯수를 줄일 수 있지만 반대로 한번에 가져오는 데이터 크기가 커지므로 db에 부하가 갈 수 있다. app에도 한번에 큰 데이터가 넘어오므로 부하 갈 수 있음
+(권장은 100~1000 범위.. 데이터베이스의 사양에 따라!)
+
+Order : OrderItem = 1:N, OrderItem : Item = 1:N 일때, 페치조인을 사용하면 조회 결과 row 수가 불필요하게 증가하여 페이징 불가능.
+-> 페치 조인 사용 X (1:N 문제 해결 x)
+Order를 조회하면 OrderItem이 지연로딩으로 인해 N개의 쿼리, OrderItem을 조회할 때 또  Item이 지연로딩으로 인해 M개의 쿼리가 발생한다.
+-> 1:N:M 문제!
+->default_batch_fetch_size 설정하면 in 쿼리를 사용하게 되어 데이터 크기에 따라 1:1:1 까지 쿼리를 줄일 수 있다!
+
+********************** API 개발 고급 정리 ******************************
+<정리>
+-엔티티 조회
+*엔티티를 조회해서 그대로 반환: V1
+*엔티티 조회 후 DTO로 변환: V2
+*페치 조인으로 쿼리 수 최적화: V3
+*컬렉션 페이징과 한계 돌파: V3.1
+->컬렉션은 페치 조인시 페이징이 불가능
+->ToOne 관계는 페치 조인으로 쿼리 수 최적화
+->컬렉션은 페치 조인 대신에 지연 로딩을 유지하고, hibernate.default_batch_fetch_size , @BatchSize 로 최적화
+-DTO 직접 조회
+*JPA에서 DTO를 직접 조회: V4 (단건 조회는 오히려 빠를 수 있다)
+*컬렉션 조회 최적화 - 일대다 관계인 컬렉션은 IN 절을 활용해서 메모리에 미리 조회해서 최적화: V5
+*플랫 데이터 최적화 - JOIN 결과를 그대로 조회 후 애플리케이션에서 원하는 모양으로 직접 변환: V6 (from Order로 조회할 경우 정작 Order로는 페이징 불가)
+
+
+<권장 순서>
+1. 엔티티 조회 방식으로 우선 접근
+    1. 페치조인으로 쿼리 수를 최적화
+    2. 컬렉션 최적화
+        1. 페이징 필요 hibernate.default_batch_fetch_size , @BatchSize 로 최적화
+        2. 페이징 필요X 페치 조인 사용
+2. 엔티티 조회 방식으로 해결이 안되면 DTO 조회 방식 사용
+3. DTO 조회 방식으로 해결이 안되면 NativeSQL or 스프링 JdbcTemplate
+
+
+
+#Open Session In View (OSIV) 와 성능 최적화 (매우 중요!!)
+
+app 실행 시 warn 로그 : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+
+JPA가 언제 DB 커넥션을 가지고 오며 언제까지 유지를 하는가? (영속성 컨텍스트가 DB와 커넥션을 가지고 있어야 하니까)
+
+-> DB트랜잭션 시작 시(서비스계층) 커넥션을 획득
+OSIV가 켜져있으면?
+트랜잭션이 끝나도 커넥션을 반환하지 않음. LAZY 로딩으로 인해 가지고 있는 프록시 객체를 채워야 하는 경우가 있기 때문
+-> 트랜잭션이 끝나도 사용자에게 완전히 응답이 완료될 때(view 렌더링 끝날때)까지 영속성 컨텍스트가 커넥션을 물고 살아있어야 함.
+-> LAZY 로딩이 가능하게 해주는 장점이 있지만, 반대로 DB커넥션 리소스를 너무 오래 가지고 있으므로 실시간 트래픽이 중요한 경우,커넥션이 모자랄 수 있음.
+-> 컨트롤러에서 외부 API 호출 시 API 대기 시간 만큼 커넥션을 유지해야한다..-> 외부 API 응답이 오래걸리면? 커넥션 리소스를 그만큼 오래사용
+OSIV false 설정하면?
+트랜잭션이 끝나면 영속성 컨텍스트가 사라지고 커넥션도 반환.
+-> 커넥션 리소스를 낭비하지 않음
+-> 대신 지연로딩을 트랜잭션 안에서 처리해야 함. view template에서 지연 로딩 동작하지 않음.
+-> 트랜잭션이 끝나서 컨텍스트가 사라졌으므로 지연로딩으로 인해 프록시를 초기화 할 때 예외가 발생함.
+-> 지연로딩을 트랜잭션 안에서 처리하거나 페치 조인을 사용하는 대응책이 있다.
+
+
+#Spring Data JPA
+JpaRepository를 상속받음으로써 대부분의 기능을 모두 제공받을 수 있다.
+일반화하기 어려운 기능도 메서드 이름으로 정확한 JPQL 쿼리를 실행한다.
+-> 대부분의 기능들을 인터페이스만 만들어도 구현할 수 있다.
+-> 그럼 구현은 누가 언제? 구현체는 스프링 데이터 JPA가 app 실행 시점에 주입해줌.
